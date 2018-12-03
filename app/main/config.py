@@ -12,21 +12,14 @@ class Config:
 class DevelopmentConfig(Config):
     ENV = 'development'
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = f'sqlite:///{os.path.join(basedir, "development.db")}'
-
-
-class TestingConfig(Config):
-    ENV = 'test'
-    TESTING = True
-    DEBUG = True
-    SQLALCHEMY_DATABASE_URI = f'sqlite:///{os.path.join(basedir, "test.db")}'
+    SQLALCHEMY_DATABASE_URI = f'postgresql://{os.getenv("DB_STATISTICS_USERNAME", None)}:{os.getenv("DB_STATISTICS_PASSWORD", None)}@{os.getenv("DB_STATISTICS_HOST", None)}/{os.getenv("DB_STATISTICS_DATABASE", None)}_dev'
 
 
 class ProductionConfig(Config):
     ENV = 'production'
     DEBUG = False
-    SQLALCHEMY_DATABASE_URI = f'mysql+mysqldb://{os.environ["DB_USERNAME"]}:{os.environ["DB_PASSWORD"]}@{os.environ["DB_HOST"]}/{os.environ["DB_DATABASE"]}'
+    SQLALCHEMY_DATABASE_URI = f'postgresql://{os.getenv("DB_USERNAME", None)}:{os.getenv("DB_PASSWORD", None)}@{os.getenv("DB_HOST", None)}/{os.getenv("DB_DATABASE", None)}'
 
 
-configurations = dict(dev=DevelopmentConfig, prod=ProductionConfig, test=TestingConfig)
+configurations = dict(dev=DevelopmentConfig, prod=ProductionConfig)
 secret = Config.SECRET_KEY
