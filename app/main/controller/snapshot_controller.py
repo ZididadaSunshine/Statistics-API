@@ -13,7 +13,7 @@ api = SnapshotDTO.api
 
 @api.route('')
 class SnapshotsResource(Resource):
-    ISO_FORMAT = '%Y-%m-%dT%H:%M:%S%z'
+    ISO_FORMAT = '%Y-%m-%dT%H:%M:%S'
 
     @api.doc('Retrieve snapshots from a time range.')
     def get(self):
