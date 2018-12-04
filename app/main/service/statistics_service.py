@@ -1,9 +1,24 @@
 from app.main.model.snapshot_model import Snapshot
 from app.main.model.synonym_model import Synonym
+import operator
 
+def avg(lst): 
+    return sum(lst) / len(lst)
 
 def in_range(snap, min, max):
-    return snap.spans_from > min and snap.spans_to < max
+    if snap.spans_to > max: 
+        return False
+
+    if snap.spans_from < min: 
+        timespan = (snap.spans_to - snap.spans_from).seconds
+        diff = (min - snap.spans_from).seconds
+        return (diff / timespan) < 0.5
+    
+    else: 
+        return True
+    
+
+    
 
 
 def get_from_range(spans_from, spans_to, granularity, synonym):
@@ -18,6 +33,35 @@ def get_from_range(spans_from, spans_to, granularity, synonym):
         contained = [snap for snap in snapshots if in_range(snap, current_time, current_max_time)]
         
         # TODO: Aggregate stats in contained
+        avg_sentiment = avg([snap.sentiment for snap in contained])
+        sentimented_keywords = {} 
+
+        for snap in contained: 
+            for sent_class in snap.statistics.keys(): 
+                sentimented_keywords[sent_class] = {}
+                # Group keywords by their sentiment. Aggregate their frequency. 
+                for keyword, freq in snap.statistics[sent_class].items(): 
+                    if keyword in sentimented_keywords[sent_class]: 
+                        sentimented_keywords[sent_class][keyword] += freq 
+                    else: 
+                        sentimented_keywords[sent_class][keyword] = freq 
+
+        # Prepare the result.
+        # The value of each sentiment class is a list of the keywords with the top-5 
+        # highest frequency. 
+
+        # Start by sorting the key/value pairs of each sentiment class 
+        for sent_class in snap.statistics.keys(): 
+            for keyword_dict in sentimented_keywords[sent_class]: 
+                sorted_keywords = sorted(keyword_dict.items(), key=operator.itemgetter(1))
+                sentimented_keywords[sent_class] = [word for word, score in sorted_keywords[:5]]
+
+        statistics[current_time] = {
+            'sentiment' : avg_sentiment, 
+            'synonym' : synonym, 
+            'sentimented_keywords' : sentimented_keywords
+        }
+
         current_time = current_max_time
 
     return statistics
