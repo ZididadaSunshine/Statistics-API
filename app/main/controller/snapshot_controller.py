@@ -14,16 +14,8 @@ api = SnapshotDTO.api
 @api.route('')
 class SnapshotsResource(Resource):
     ISO_FORMAT = '%Y-%m-%dT%H:%M:%S'
-
-    @api.doc('Retrieve snapshots from a time range.')
-    def get(self):
-        encoded = dict()
-
-        for snapshot in service.get_snapshots():
-            encoded[snapshot.id] = {'from': snapshot.spans_from.strftime(self.ISO_FORMAT),
-                                    'statistics': snapshot.statistics}
-
-        return encoded
+    EXPECTED_PROPERTIES = {'posts', 'keywords'}
+    CLASSES_REQUIRED = 2
 
     @api.response(SnapshotServiceResponse.AlreadyExists, 'Snapshot already exists.')
     @api.response(SnapshotServiceResponse.Created, 'Snapshot created successfully.')
@@ -35,5 +27,15 @@ class SnapshotsResource(Resource):
         synonym = request.json['synonym']
         statistics = json.loads(request.json['statistics'])
         sentiment = request.json['sentiment']
+
+        # Confirm that all required classes are provided
+        if len(statistics) != self.CLASSES_REQUIRED:
+            return dict(message='Invalid amount of classes specified.'), 400
+
+        # Confirm that statistics for all classes are provided
+        for stat_class in statistics:
+            for expected in self.EXPECTED_PROPERTIES:
+                if expected not in statistics[stat_class]:
+                    return dict(message=f'Expected property {expected} in class {stat_class}.'), 400
 
         return service.add_snapshot(sentiment, statistics, spans_from, spans_to, synonym)
