@@ -3,7 +3,7 @@ from app.main.model.synonym_model import Synonym
 
 
 def in_range(snap, min, max):
-    return snap.spans_from < max and snap.spans_to >= min
+    return snap.spans_from > min and snap.spans_to < max
 
 
 def get_from_range(spans_from, spans_to, granularity, synonym):
