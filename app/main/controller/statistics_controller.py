@@ -5,6 +5,7 @@ from flask import request
 from flask_restplus import Resource
 
 from app.main.dto.statistics_dto import StatisticsDTO
+from app.main.service.statistics_service import get_from_range
 
 api = StatisticsDTO.api
 
@@ -27,8 +28,8 @@ class StatisticsResource(Resource):
             return dict(message=f'Unsupported granularity {granularity}.'), 400
 
         # Check if there is a mismatch between granularity and time range
-        minimum_span = self.GRANULARITIES[granularity]
-        if (spans_to - spans_from) < minimum_span:
+        granularity = self.GRANULARITIES[granularity]
+        if (spans_to - spans_from) < granularity:
             return dict(message=f'Expected granularity to be greater or equal to time range.'), 400
 
-        return 'ok'
+        return get_from_range(spans_from, spans_to, granularity, synonym)

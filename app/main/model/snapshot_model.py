@@ -8,3 +8,4 @@ class Snapshot(db.Model):
     statistics = db.Column(db.JSON, nullable=False)
     sentiment = db.Column(db.Float, nullable=False)
     synonym_id = db.Column(db.Integer, db.ForeignKey('synonym.id'), primary_key=True)
+    synonym = db.relationship("Synonym")
