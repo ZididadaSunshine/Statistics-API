@@ -1,24 +1,24 @@
-from app.main.model.snapshot_model import Snapshot
-from app.main.model.synonym_model import Synonym
 import operator
 
-def avg(lst): 
-    return sum(lst) / len(lst)
+from app.main.model.snapshot_model import Snapshot
+from app.main.model.synonym_model import Synonym
 
-def in_range(snap, min, max):
-    if snap.spans_to > max: 
+
+def average(lst):
+    return sum(lst) / float(len(lst))
+
+
+def in_range(snap, lower, upper):
+    if snap.spans_to > upper:
         return False
 
-    if snap.spans_from < min: 
+    if snap.spans_from < lower:
         timespan = (snap.spans_to - snap.spans_from).seconds
-        diff = (min - snap.spans_from).seconds
+        diff = (lower - snap.spans_from).seconds
         return (diff / timespan) < 0.5
     
     else: 
         return True
-    
-
-    
 
 
 def get_from_range(spans_from, spans_to, granularity, synonym):
@@ -30,10 +30,10 @@ def get_from_range(spans_from, spans_to, granularity, synonym):
     while current_time < spans_to:
         current_max_time = current_time + granularity
 
+        # Determine which snapshots are contained in the current time range
         contained = [snap for snap in snapshots if in_range(snap, current_time, current_max_time)]
-        
-        # TODO: Aggregate stats in contained
-        avg_sentiment = avg([snap.sentiment for snap in contained])
+
+        avg_sentiment = average([snap.sentiment for snap in contained])
         sentimented_keywords = {} 
 
         for snap in contained: 
@@ -65,4 +65,3 @@ def get_from_range(spans_from, spans_to, granularity, synonym):
         current_time = current_max_time
 
     return statistics
-
