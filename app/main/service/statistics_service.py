@@ -50,10 +50,8 @@ def get_from_range(spans_from, spans_to, granularity, synonyms):
 
             if contained:
                 # Get which classes the snapshots agree on
-                for i in contained:
-                    print(i.statistics.keys())
-                classes = reduce(lambda x, y: x.statistics.keys() & y.statistics.keys(), contained)
-                print(classes)
+                all_keys = [snap.statistics.keys() for snap in contained]
+                classes = reduce(lambda x, y: x & y, all_keys)
 
                 sentimented_keywords = {}
                 for snap in contained:
@@ -67,8 +65,6 @@ def get_from_range(spans_from, spans_to, granularity, synonyms):
                             else:
                                 sentimented_keywords[cls][keyword] = 1
 
-                print(sentimented_keywords)
-
                 # Prepare the result.
                 # The value of each sentiment class is a list of the keywords with the top-5
                 # highest frequency.
@@ -76,6 +72,7 @@ def get_from_range(spans_from, spans_to, granularity, synonyms):
                 # Start by sorting the key/value pairs of each sentiment class
                 for cls in classes:
                     for keyword_dict in sentimented_keywords[cls]:
+                        print(keyword_dict)
                         sorted_keywords = sorted(keyword_dict.items(), key=operator.itemgetter(1))
                         sentimented_keywords[cls] = [word for word, score in sorted_keywords[:5]]
 
