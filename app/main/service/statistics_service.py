@@ -17,6 +17,10 @@ def average(lst):
     return sum(lst) / float(len(lst))
 
 
+def sum_posts(lst, cls):
+    return sum([item.statistics[cls]['posts'] for item in lst])
+
+
 def in_range(snap, lower, upper):
     if snap.spans_to > upper:
         return False
@@ -45,41 +49,40 @@ def get_from_range(spans_from, spans_to, granularity, synonyms):
             # Determine which snapshots are contained in the current time range
             contained = [snap for snap in snapshots if in_range(snap, current_time, current_max_time)]
 
-            # Compute the average sentiment
-            average_sentiment = average([snap.sentiment for snap in contained])
+            # Skip current timespan if there are no snapshots
+            if not contained:
+                current_time = current_max_time
 
-            if contained:
-                # Get which classes the snapshots agree on
-                all_keys = [snap.statistics.keys() for snap in contained]
-                classes = reduce(lambda x, y: x & y, all_keys)
+                continue
 
-                sentimented_keywords = {}
-                for snap in contained:
-                    for cls in classes:
-                        sentimented_keywords[cls] = {}
-                        # Group keywords by their sentiment. Aggregate their frequency.
-                        print(snap.statistics[cls])
-                        for keyword in snap.statistics[cls]['keywords']:
-                            if keyword in sentimented_keywords[cls]:
-                                sentimented_keywords[cls][keyword] += 1
-                            else:
-                                sentimented_keywords[cls][keyword] = 1
+            # Get which classes the snapshots agree on
+            all_keys = [snap.statistics.keys() for snap in contained]
+            classes = reduce(lambda x, y: x & y, all_keys)
 
-                # Prepare the result.
-                # The value of each sentiment class is a list of the keywords with the top-5
-                # highest frequency.
+            sentimented_keywords = dict()
+            class_statistics = dict()
+            # Group keywords by their sentiment. Aggregate their frequency.
+            for cls in classes:
+                sentimented_keywords[cls] = dict()
+                class_statistics[cls] = {'posts': sum_posts(contained, cls)}
 
-                # Start by sorting the key/value pairs of each sentiment class
-                for cls in classes:
-                    for keyword_dict in sentimented_keywords[cls]:
-                        print(keyword_dict)
-                        sorted_keywords = sorted(keyword_dict.items(), key=operator.itemgetter(1))
-                        sentimented_keywords[cls] = [word for word, score in sorted_keywords[:5]]
+                for snapshot in contained:
+                    for keyword in snapshot.statistics[cls]['keywords']:
+                        if keyword in sentimented_keywords[cls]:
+                            sentimented_keywords[cls][keyword] += 1
+                        else:
+                            sentimented_keywords[cls][keyword] = 1
 
-                print(sentimented_keywords)
+            # Sort key/value pairs of each sentiment class
+            for cls in classes:
+                sorted_keywords = sorted(sentimented_keywords[cls].items(), key=operator.itemgetter(1), reverse=True)
+
+                # Take the top 5 keywords according to their frequency
+                class_statistics[cls]['keywords'] = [keyword for keyword, frequency in sorted_keywords[:5]]
 
             statistics[synonym][format_chart_date(current_time)] = {
-                'sentiment': average_sentiment,
+                'sentiment': average([snap.sentiment for snap in contained]),
+                'statistics': class_statistics
             }
 
             current_time = current_max_time
