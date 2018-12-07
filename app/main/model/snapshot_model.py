@@ -9,3 +9,6 @@ class Snapshot(db.Model):
     sentiment = db.Column(db.Float, nullable=False)
     synonym_id = db.Column(db.Integer, db.ForeignKey('synonym.id'), primary_key=True)
     synonym = db.relationship("Synonym")
+
+    def __repr__(self):
+        return f'<Snapshot {self.id} from {self.spans_from} to {self.spans_to}>'

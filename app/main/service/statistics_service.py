@@ -1,5 +1,6 @@
 import datetime
 import operator
+from collections import namedtuple
 from functools import reduce
 
 from app.main.model.snapshot_model import Snapshot
@@ -21,17 +22,23 @@ def sum_posts(lst, cls):
     return sum([item.statistics[cls]['posts'] for item in lst])
 
 
+def has_synonym(snap, synonym):
+    return snap.synonym.synonym == synonym
+
+
 def in_range(snap, lower, upper):
-    if snap.spans_to > upper:
+    # Get how much the date ranges overlap in seconds
+    latest_start = max(lower, snap.spans_from)
+    earliest_end = min(upper, snap.spans_to)
+    overlap = max(0, (earliest_end - latest_start).total_seconds())
+    if not overlap:
         return False
 
-    if snap.spans_from < lower:
-        timespan = (snap.spans_to - snap.spans_from).seconds
-        diff = (lower - snap.spans_from).seconds
-        return (diff / timespan) < 0.5
-    
-    else: 
-        return True
+    # Get the span of a snap in seconds
+    snap_span = (snap.spans_to - snap.spans_from).seconds
+
+    # Return true if the snap overlaps with more than half of the queried span
+    return snap_span / overlap > 0.5
 
 
 def get_from_range(spans_from, spans_to, granularity, synonyms):
@@ -47,7 +54,7 @@ def get_from_range(spans_from, spans_to, granularity, synonyms):
             current_max_time = current_time + granularity
 
             # Determine which snapshots are contained in the current time range
-            contained = [snap for snap in snapshots if in_range(snap, current_time, current_max_time)]
+            contained = [snap for snap in snapshots if has_synonym(snap, synonym) and in_range(snap, current_time, current_max_time)]
 
             # Skip current timespan if there are no snapshots
             if not contained:
