@@ -12,8 +12,9 @@ api = StatisticsDTO.api
 
 @api.route('')
 class StatisticsResource(Resource):
-    ISO_FORMAT = '%Y-%m-%dT%H:%M:%S'
+    ISO_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
     GRANULARITIES = {'hour': timedelta(hours=1),
+                     'halfday': timedelta(hours=12),
                      'day': timedelta(days=1),
                      'week': timedelta(weeks=1)}
 

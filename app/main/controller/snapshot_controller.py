@@ -13,7 +13,7 @@ api = SnapshotDTO.api
 
 @api.route('')
 class SnapshotsResource(Resource):
-    ISO_FORMAT = '%Y-%m-%dT%H:%M:%S'
+    ISO_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
     EXPECTED_PROPERTIES = {'posts', 'keywords'}
     CLASSES_REQUIRED = 2
 
