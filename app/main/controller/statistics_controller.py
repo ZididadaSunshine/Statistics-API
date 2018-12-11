@@ -27,8 +27,8 @@ def _get_granularity_span(granularity):
     return GRANULARITIES.get(granularity, None)
 
 
-@api.route('/<string:granularity>/average')
-class AverageSentimentResource(Resource):
+@api.route('/<string:granularity>/brand')
+class BrandStatisticsResource(Resource):
     @api.doc('Retrieve an average of the combined sentiment for the requested synonyms.')
     @api.expect(StatisticsDTO.synonyms, validate=True)
     def post(self, granularity):
@@ -43,7 +43,7 @@ class AverageSentimentResource(Resource):
 
 
 @api.route('/<string:granularity>/overview')
-class OverviewResource(Resource):
+class OverviewStatisticsResource(Resource):
     @api.doc('Retrieve an overview from a time range and a granularity.')
     @api.expect(StatisticsDTO.timerange, validate=True)
     def post(self, granularity):
