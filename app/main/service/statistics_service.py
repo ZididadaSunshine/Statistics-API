@@ -1,7 +1,7 @@
 import datetime
 import operator
-from collections import namedtuple
 from functools import reduce
+
 
 from app.main.model.snapshot_model import Snapshot
 from app.main.model.synonym_model import Synonym
@@ -41,10 +41,44 @@ def in_range(snap, lower, upper):
     return snap_span / overlap > 0.5
 
 
-def get_from_range(spans_from, spans_to, granularity, synonyms):
-    # In the future, multiple synonyms will be supported
-    snapshots = Snapshot.query.select_from(Synonym).filter(Synonym.synonym.in_(synonyms)).join(Synonym.snapshots).\
+def _replace_date(date):
+    return date.replace(minute=0, second=0, microsecond=0)
+
+
+def _get_snapshots(spans_from, spans_to, synonyms):
+    spans_from = _replace_date(spans_from)
+    spans_to = _replace_date(spans_to)
+
+    return Snapshot.query.select_from(Synonym).filter(Synonym.synonym.in_(synonyms)).join(Synonym.snapshots).\
         filter((Snapshot.spans_from >= spans_from) & (Snapshot.spans_to <= spans_to)).all()
+
+
+def get_average(granularity_span, synonyms):
+    """ Provides the combined average over all the provided synonyms. """
+    now = datetime.datetime.utcnow()
+    previous = now - granularity_span
+
+    current_average = None
+    previous_average = None
+
+    # Only retrieve snapshots once and then use in_range to determine which are in the correct ranges (less queries)
+    snapshots = _get_snapshots(now - granularity_span * 2, now, synonyms)
+
+    if snapshots:
+        # Compute averages from the current period and the previous
+        current_average = average([snap.sentiment for snap in snapshots if in_range(snap, previous, now)])
+        previous_average = average([snap.sentiment for snap in snapshots if in_range(snap, previous - granularity_span,
+                                                                                     now)])
+
+    return {
+        'average': current_average,
+        'trend': current_average - previous_average if previous_average else None
+    }
+
+
+def get_overview(spans_from, spans_to, granularity, synonyms):
+    """ Provides an overview for all synonyms and for each granularity that fits into it. """
+    snapshots = _get_snapshots(spans_from, spans_to, synonyms)
 
     statistics = {synonym: dict() for synonym in synonyms}
     for synonym in synonyms:
@@ -54,7 +88,9 @@ def get_from_range(spans_from, spans_to, granularity, synonyms):
             current_max_time = current_time + granularity
 
             # Determine which snapshots are contained in the current time range
-            contained = [snap for snap in snapshots if has_synonym(snap, synonym) and in_range(snap, current_time, current_max_time)]
+            contained = [snap for snap in snapshots if has_synonym(snap, synonym) and in_range(snap,
+                                                                                               current_time,
+                                                                                               current_max_time)]
 
             # Skip current timespan if there are no snapshots
             if not contained:
