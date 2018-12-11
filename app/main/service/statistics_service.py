@@ -81,9 +81,10 @@ def get_average(granularity_span, synonyms):
         current_average = _average([snap.sentiment for snap in current_snapshots])
         previous_average = _average([snap.sentiment for snap in previous_snapshots])
 
-        # Sum posts for all classes
-        classes = _get_intersecting_classes(current_snapshots)
-        posts = reduce(lambda x, y: _sum_posts(current_snapshots, x) + _sum_posts(current_snapshots, y), classes)
+        # Sum posts for all classes in current snapshot period
+        if current_snapshots:
+            classes = _get_intersecting_classes(current_snapshots)
+            posts = reduce(lambda x, y: _sum_posts(current_snapshots, x) + _sum_posts(current_snapshots, y), classes)
     return {
         'sentiment_average': current_average,
         'sentiment_trend': current_average - previous_average if previous_average else None,
