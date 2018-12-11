@@ -7,26 +7,26 @@ from app.main.model.snapshot_model import Snapshot
 from app.main.model.synonym_model import Synonym
 
 
-def format_chart_date(date):
+def _format_chart_date(date):
     return datetime.datetime.strftime(date, '%Y-%m-%d %H:%M:%S')
 
 
-def average(lst):
+def _average(lst):
     if not lst:
         return 0
 
     return sum(lst) / float(len(lst))
 
 
-def sum_posts(lst, cls):
+def _sum_posts(lst, cls):
     return sum([item.statistics[cls]['posts'] for item in lst])
 
 
-def has_synonym(snap, synonym):
+def _has_synonym(snap, synonym):
     return snap.synonym.synonym == synonym
 
 
-def in_range(snap, lower, upper):
+def _in_range(snap, lower, upper):
     # Get how much the date ranges overlap in seconds
     latest_start = max(lower, snap.spans_from)
     earliest_end = min(upper, snap.spans_to)
@@ -53,6 +53,13 @@ def _get_snapshots(spans_from, spans_to, synonyms):
         filter((Snapshot.spans_from >= spans_from) & (Snapshot.spans_to <= spans_to)).all()
 
 
+def _get_intersecting_classes(snapshots):
+    all_keys = [snap.statistics.keys() for snap in snapshots]
+    classes = reduce(lambda x, y: x & y, all_keys)
+
+    return classes
+
+
 def get_average(granularity_span, synonyms):
     """ Provides the combined average over all the provided synonyms. """
     now = datetime.datetime.utcnow()
@@ -60,19 +67,27 @@ def get_average(granularity_span, synonyms):
 
     current_average = None
     previous_average = None
+    posts = 0
 
     # Only retrieve snapshots once and then use in_range to determine which are in the correct ranges (less queries)
     snapshots = _get_snapshots(now - granularity_span * 2, now, synonyms)
 
     if snapshots:
         # Compute averages from the current period and the previous
-        current_average = average([snap.sentiment for snap in snapshots if in_range(snap, previous, now)])
-        previous_average = average([snap.sentiment for snap in snapshots if in_range(snap, previous - granularity_span,
-                                                                                     now)])
+        current_snapshots = [snap for snap in snapshots if _in_range(snap, previous, now)]
+        previous_snapshots = [snap for snap in snapshots if _in_range(snap, previous - granularity_span, now)]
 
+        # Get average sentiment values
+        current_average = _average([snap.sentiment for snap in current_snapshots])
+        previous_average = _average([snap.sentiment for snap in previous_snapshots])
+
+        # Sum posts for all classes
+        classes = _get_intersecting_classes(current_snapshots)
+        posts = reduce(lambda x, y: _sum_posts(current_snapshots, x) + _sum_posts(current_snapshots, y), classes)
     return {
-        'average': current_average,
-        'trend': current_average - previous_average if previous_average else None
+        'sentiment_average': current_average,
+        'sentiment_trend': current_average - previous_average if previous_average else None,
+        'posts': posts
     }
 
 
@@ -88,9 +103,9 @@ def get_overview(spans_from, spans_to, granularity, synonyms):
             current_max_time = current_time + granularity
 
             # Determine which snapshots are contained in the current time range
-            contained = [snap for snap in snapshots if has_synonym(snap, synonym) and in_range(snap,
-                                                                                               current_time,
-                                                                                               current_max_time)]
+            contained = [snap for snap in snapshots if _has_synonym(snap, synonym) and _in_range(snap,
+                                                                                                 current_time,
+                                                                                                 current_max_time)]
 
             # Skip current timespan if there are no snapshots
             if not contained:
@@ -107,7 +122,7 @@ def get_overview(spans_from, spans_to, granularity, synonyms):
             # Group keywords by their sentiment. Aggregate their frequency.
             for cls in classes:
                 sentimented_keywords[cls] = dict()
-                class_statistics[cls] = {'posts': sum_posts(contained, cls)}
+                class_statistics[cls] = {'posts': _sum_posts(contained, cls)}
 
                 for snapshot in contained:
                     for keyword in snapshot.statistics[cls]['keywords']:
@@ -123,8 +138,8 @@ def get_overview(spans_from, spans_to, granularity, synonyms):
                 # Take the top 5 keywords according to their frequency
                 class_statistics[cls]['keywords'] = [keyword for keyword, frequency in sorted_keywords[:5]]
 
-            statistics[synonym][format_chart_date(current_time)] = {
-                'sentiment': average([snap.sentiment for snap in contained]),
+            statistics[synonym][_format_chart_date(current_time)] = {
+                'sentiment': _average([snap.sentiment for snap in contained]),
                 'statistics': class_statistics
             }
 
