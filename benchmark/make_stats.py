@@ -61,7 +61,7 @@ if __name__ == "__main__":
     ln1 = ax1.plot(resp_x, resp_y, color='green', label='Response time')
     ln2 = ax1.plot(snap_x, snap_y, color='orange', label='RDMS query time')
     ln3 = ax1.plot(over_x, over_y, color='blue', label='Processing time')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.legend(bbox_to_anchor=(1.1, 1), loc=2, borderaxespad=0.)
     ax1.set_xlabel('Time (seconds)')
     ax1.set_ylabel('Time (milliseconds)')
 
@@ -74,5 +74,5 @@ if __name__ == "__main__":
     ax1.legend(lns, labs, loc=0)
 
     plt.title('Performance over time')
-    plt.grid()
+    plt.grid(linestyle=':')
     plt.show()
