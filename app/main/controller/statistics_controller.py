@@ -20,7 +20,7 @@ GRANULARITIES = {
 
 def _parse_date(date):
     """ Parse a date and remove any minutes, seconds and microseconds."""
-    return datetime.datetime.strptime(date, ISO_FORMAT)
+    return datetime.datetime.strptime(date, ISO_FORMAT).replace(minute=0, second=0, microsecond=0)
 
 
 def _get_granularity_span(granularity):

@@ -41,14 +41,7 @@ def _in_range(snap, lower, upper):
     return snap_span / overlap > 0.5
 
 
-def _replace_date(date):
-    return date.replace(minute=0, second=0, microsecond=0)
-
-
 def _get_snapshots(spans_from, spans_to, synonyms):
-    spans_from = _replace_date(spans_from)
-    spans_to = _replace_date(spans_to)
-
     return Snapshot.query.select_from(Synonym).filter(Synonym.synonym.in_(synonyms)).join(Synonym.snapshots).\
         filter((Snapshot.spans_from >= spans_from) & (Snapshot.spans_to <= spans_to)).all()
 
@@ -62,7 +55,7 @@ def _get_intersecting_classes(snapshots):
 
 def get_average(granularity_span, synonyms):
     """ Provides the combined average over all the provided synonyms. """
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.utcnow().replace(minute=0, second=0, microsecond=0)
     previous = now - granularity_span
 
     current_average = None
