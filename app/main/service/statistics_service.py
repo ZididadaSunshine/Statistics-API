@@ -85,6 +85,7 @@ def get_average(granularity_span, synonyms):
         if current_snapshots:
             classes = _get_intersecting_classes(current_snapshots)
             posts = reduce(lambda x, y: _sum_posts(current_snapshots, x) + _sum_posts(current_snapshots, y), classes)
+
     return {
         'sentiment_average': current_average,
         'sentiment_trend': current_average - previous_average if previous_average else None,
@@ -127,6 +128,9 @@ def get_overview(spans_from, spans_to, granularity, synonyms):
 
                 for snapshot in contained:
                     for keyword in snapshot.statistics[cls]['keywords']:
+                        if keyword == synonym:
+                            continue
+
                         if keyword in sentimented_keywords[cls]:
                             sentimented_keywords[cls][keyword] += 1
                         else:
