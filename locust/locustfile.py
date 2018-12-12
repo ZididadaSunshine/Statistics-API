@@ -1,12 +1,12 @@
 import datetime
 import fcntl
+from random import randint, sample
 
 from locust import HttpLocust, TaskSet, task, events
-from random import randint, sample, randrange
 
 USER_CREDENTIALS = list()
 WORDS = [line.strip() for line in open('../words.txt')][:500]
-ISO_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
+ISO_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
 EARLIEST = datetime.datetime(day=11, month=12, year=2017)
 LATEST = datetime.datetime(day=11, month=12, year=2018)
 

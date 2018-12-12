@@ -1,10 +1,10 @@
 import datetime
-from functools import reduce
+
 import matplotlib.pyplot as plt
-from matplotlib.pyplot import figure
 
 ISO_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
-DIVISOR = 5
+DIVISOR = 3
+
 
 def read_stats(file):
     stats = {}
@@ -48,6 +48,13 @@ if __name__ == "__main__":
     over_x, over_y = dict_to_avg(overview)
     cons_x, cons_y = dict_to_avg(consumers)
 
+    if len(cons_x) < len(over_x):
+        remaining = over_x[len(cons_x)-len(over_x):]
+        print(remaining)
+        for val in remaining:
+            cons_x.append(val)
+            cons_y.append(cons_y[-1])
+
     fig, ax1 = plt.subplots()
     fig.set_figwidth(10)
     fig.set_figheight(5)
@@ -66,7 +73,6 @@ if __name__ == "__main__":
     labs = [l.get_label() for l in lns]
     ax1.legend(lns, labs, loc=0)
 
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.title('Performance over time')
     plt.grid()
     plt.show()
