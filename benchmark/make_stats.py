@@ -3,7 +3,7 @@ import datetime
 import matplotlib.pyplot as plt
 
 ISO_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
-DIVISOR = 3
+DIVISOR = 5
 
 
 def read_stats(file):
