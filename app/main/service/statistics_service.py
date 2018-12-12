@@ -1,14 +1,28 @@
 import datetime
 import operator
+import fcntl
+import time
 from functools import reduce
-
 
 from app.main.model.snapshot_model import Snapshot
 from app.main.model.synonym_model import Synonym
 
+_current_milli_time = lambda: int(round(time.time() * 1000))
+
+
+def _format_log_date(date):
+    return datetime.datetime.strftime(date, '%Y-%m-%d %H:%M:%S.%f')
+
 
 def _format_chart_date(date):
     return datetime.datetime.strftime(date, '%Y-%m-%d %H:%M:%S')
+
+
+def _append_line_exclusive(file, contents):
+    with open(file, 'a') as file:
+        fcntl.flock(file, fcntl.LOCK_EX)
+        file.write(contents + '\n')
+        fcntl.flock(file, fcntl.LOCK_UN)
 
 
 def _average(lst):
@@ -42,8 +56,15 @@ def _in_range(snap, lower, upper):
 
 
 def _get_snapshots(spans_from, spans_to, synonyms):
-    return Snapshot.query.select_from(Synonym).filter(Synonym.synonym.in_(synonyms)).join(Synonym.snapshots).\
+    now_ms = _current_milli_time()
+
+    snapshots = Snapshot.query.select_from(Synonym).filter(Synonym.synonym.in_(synonyms)).join(Synonym.snapshots). \
         filter((Snapshot.spans_from >= spans_from) & (Snapshot.spans_to <= spans_to)).all()
+
+    _append_line_exclusive('snapshot_timer.dat',
+                           f'{_format_log_date(datetime.datetime.utcnow())}={_current_milli_time() - now_ms}')
+
+    return snapshots
 
 
 def _get_intersecting_classes(snapshots):
@@ -64,6 +85,7 @@ def get_average(granularity_span, synonyms):
 
     # Only retrieve snapshots once and then use in_range to determine which are in the correct ranges (less queries)
     snapshots = _get_snapshots(now - granularity_span * 2, now, synonyms)
+    now_ms = _current_milli_time()
 
     if snapshots:
         # Compute averages from the current period and the previous
@@ -79,6 +101,9 @@ def get_average(granularity_span, synonyms):
             classes = _get_intersecting_classes(current_snapshots)
             posts = reduce(lambda x, y: _sum_posts(current_snapshots, x) + _sum_posts(current_snapshots, y), classes)
 
+    _append_line_exclusive('average_timer.dat',
+                           f'{_format_log_date(datetime.datetime.utcnow())}={_current_milli_time() - now_ms}')
+
     return {
         'sentiment_average': current_average,
         'sentiment_trend': current_average - previous_average if previous_average else None,
@@ -89,6 +114,7 @@ def get_average(granularity_span, synonyms):
 def get_overview(spans_from, spans_to, granularity, synonyms):
     """ Provides an overview for all synonyms and for each granularity that fits into it. """
     snapshots = _get_snapshots(spans_from, spans_to, synonyms)
+    now_ms = _current_milli_time()
 
     statistics = {synonym: dict() for synonym in synonyms}
     for synonym in synonyms:
@@ -142,5 +168,8 @@ def get_overview(spans_from, spans_to, granularity, synonyms):
             }
 
             current_time = current_max_time
+
+    _append_line_exclusive('overview_timer.dat',
+                           f'{_format_log_date(datetime.datetime.utcnow())}={_current_milli_time() - now_ms}')
 
     return statistics

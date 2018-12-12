@@ -7,7 +7,7 @@ class Snapshot(db.Model):
     spans_to = db.Column(db.DateTime, nullable=False)
     statistics = db.Column(db.JSON, nullable=False)
     sentiment = db.Column(db.Float, nullable=False)
-    synonym_id = db.Column(db.Integer, db.ForeignKey('synonym.id'), primary_key=True)
+    synonym_id = db.Column(db.Integer, db.ForeignKey('synonym.id'), unique=True)
     synonym = db.relationship("Synonym")
 
     def __repr__(self):
