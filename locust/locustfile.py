@@ -38,8 +38,8 @@ def _append_line_exclusive(file, contents):
         fcntl.flock(file, fcntl.LOCK_UN)
 
 
-def _log_response_time(request_type, name, time, length):
-    _append_line_exclusive('response_times.dat', f'{_format_log_date()}={time}')
+def _log_response_time(request_type, name, response_time, response_length):
+    _append_line_exclusive('response_times.dat', f'{_format_log_date()}={response_time}')
 
 
 events.request_success += _log_response_time
@@ -87,5 +87,5 @@ class ConsumerBehavior(TaskSet):
 
 class StatisticsConsumer(HttpLocust):
     task_set = ConsumerBehavior
-    min_wait = 1000
-    max_wait = 6000
+    min_wait = 5000
+    max_wait = 10000
