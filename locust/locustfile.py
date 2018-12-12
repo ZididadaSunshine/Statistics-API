@@ -6,7 +6,7 @@ from random import randint, sample, randrange
 
 USER_CREDENTIALS = list()
 WORDS = [line.strip() for line in open('../words.txt')][:500]
-ISO_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
+ISO_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
 EARLIEST = datetime.datetime(day=11, month=12, year=2017)
 LATEST = datetime.datetime(day=11, month=12, year=2018)
 
