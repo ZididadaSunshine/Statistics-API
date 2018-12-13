@@ -68,19 +68,19 @@ class ConsumerBehavior(TaskSet):
 
     @task(2)
     def request_half_day(self):
-        spans_from, spans_to = _random_range(datetime.timedelta(hours=12), datetime.timedelta(days=14))
+        spans_from, spans_to = _random_range(datetime.timedelta(hours=12), datetime.timedelta(days=7))
 
         self._request('halfday', spans_from, spans_to)
 
     @task(3)
     def request_day(self):
-        spans_from, spans_to = _random_range(datetime.timedelta(days=1), datetime.timedelta(days=31))
+        spans_from, spans_to = _random_range(datetime.timedelta(days=1), datetime.timedelta(days=14))
 
         self._request('day', spans_from, spans_to)
 
     @task(4)
     def request_week(self):
-        spans_from, spans_to = _random_range(datetime.timedelta(days=7), datetime.timedelta(days=62))
+        spans_from, spans_to = _random_range(datetime.timedelta(days=7), datetime.timedelta(days=28))
 
         self._request('week', spans_from, spans_to)
 
