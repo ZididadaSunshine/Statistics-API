@@ -50,37 +50,69 @@ def _get_snapshots(spans_from, spans_to, synonyms):
     return snapshots
 
 
-def _get_intersecting_classes(snapshots):
-    all_keys = [snap.statistics.keys() for snap in snapshots]
-    classes = reduce(lambda x, y: x & y, all_keys)
-
-    return classes
-
-
-def get_n_latest(granularity_span, synonyms, n):
+def _get_n_latest(granularity_span, synonyms, n):
     now = datetime.datetime.utcnow().replace(minute=0, second=0, microsecond=0)
     start = now - granularity_span * n
 
     snapshots = _get_snapshots(start, now, synonyms)
 
     result = []
-    if snapshots:
-        current_time = start
+    current_time = start
+    while current_time < now:
+        next_time = current_time + granularity_span
 
-        while current_time < now:
-            next_time = current_time + granularity_span
+        result.append([snap for snap in snapshots if _in_range(snap, current_time, next_time)])
 
-            result.append([snap for snap in snapshots if _in_range(snap, current_time, next_time)])
-
-            current_time = next_time
+        current_time = next_time
 
     return result
+
+
+def _aggregate_keywords(snapshots, skip_words=None):
+    aggregated = dict()
+
+    classes = _get_intersecting_classes(snapshots)
+    aggregated_by_class = _aggregate_keywords_by_class(classes, snapshots, skip_words)
+    for cls in classes:
+        for keyword, frequency in aggregated_by_class[cls].items():
+            aggregated[keyword] = aggregated.get(keyword, 0) + frequency
+
+    return aggregated
+
+
+def _aggregate_keywords_by_class(sentiment_classes, snapshots, skip_words=None):
+    sentimented_keywords = dict()
+
+    for cls in sentiment_classes:
+        sentimented_keywords[cls] = dict()
+
+        for snapshot in snapshots:
+            for keyword in snapshot.statistics[cls]['keywords']:
+                if skip_words and keyword in skip_words:
+                    continue
+
+                sentimented_keywords[cls][keyword] = sentimented_keywords[cls].get(keyword, 0) + 1
+
+    return sentimented_keywords
+
+
+def _get_intersecting_classes(snapshots):
+    if snapshots:
+        all_keys = [snap.statistics.keys() for snap in snapshots]
+
+        return reduce(lambda x, y: x & y, all_keys)
+
+    return list()
+
+
+def _normalize_values(from_dict, with_min, with_max):
+    return {x: (from_dict[x] - with_min) / (with_max - with_min) for x in from_dict}
 
 
 def get_average(granularity_span, synonyms):
     """ Provides the combined average over all the provided synonyms. """
     # Only retrieve snapshots once and then use in_range to determine which are in the correct ranges (less queries)
-    previous_snapshots, current_snapshots = get_n_latest(granularity_span, synonyms, 2)
+    previous_snapshots, current_snapshots = _get_n_latest(granularity_span, synonyms, 2)
 
     # Get average sentiment values
     current_average = _average([snap.sentiment for snap in current_snapshots])
@@ -99,7 +131,7 @@ def get_average(granularity_span, synonyms):
     }
 
 
-def get_overview(spans_from, spans_to, granularity, synonyms):
+def get_overview(spans_from, spans_to, granularity, synonyms, n_keywords=5):
     """ Provides an overview for all synonyms and for each granularity that fits into it. """
     snapshots = _get_snapshots(spans_from, spans_to, synonyms)
 
@@ -121,34 +153,22 @@ def get_overview(spans_from, spans_to, granularity, synonyms):
 
                 continue
 
-            # Get which classes the snapshots agree on
-            all_keys = [snap.statistics.keys() for snap in contained]
-            classes = reduce(lambda x, y: x & y, all_keys)
+            # Get the intersection of classes
+            classes = _get_intersecting_classes(contained)
 
-            sentimented_keywords = dict()
-            class_statistics = dict()
-            # Group keywords by their sentiment. Aggregate their frequency.
-            for cls in classes:
-                sentimented_keywords[cls] = dict()
-                class_statistics[cls] = {'posts': _sum_posts(contained, cls)}
-
-                for snapshot in contained:
-                    for keyword in snapshot.statistics[cls]['keywords']:
-                        if keyword == synonym:
-                            continue
-
-                        if keyword in sentimented_keywords[cls]:
-                            sentimented_keywords[cls][keyword] += 1
-                        else:
-                            sentimented_keywords[cls][keyword] = 1
+            # Aggregate keywords by sentiment classes
+            sentimented_keywords = _aggregate_keywords_by_class(classes, contained, synonyms)
 
             # Sort key/value pairs of each sentiment class
-            print(sentimented_keywords)
+            class_statistics = dict()
             for cls in classes:
                 sorted_keywords = sorted(sentimented_keywords[cls].items(), key=operator.itemgetter(1), reverse=True)
 
                 # Take the top 5 keywords according to their frequency
-                class_statistics[cls]['keywords'] = [keyword for keyword, frequency in sorted_keywords[:5]]
+                class_statistics[cls] = {
+                    'posts': _sum_posts(contained, cls),
+                    'keywords': [keyword for keyword, frequency in sorted_keywords[:n_keywords]]
+                }
 
             statistics[synonym][_format_chart_date(current_time)] = {
                 'sentiment': _average([snap.sentiment for snap in contained]),
@@ -158,3 +178,33 @@ def get_overview(spans_from, spans_to, granularity, synonyms):
             current_time = current_max_time
 
     return statistics
+
+
+def get_trending_keywords(granularity_span, synonyms, n_keywords=10):
+    previous, current = _get_n_latest(granularity_span, synonyms, 2)
+
+    # Aggregate all keywords from the period
+    aggregated_keywords = _aggregate_keywords(previous + current, synonyms)
+    if not aggregated_keywords:
+        return dict()
+
+    # Get the minimum and maximum frequency
+    min_frequency = min(aggregated_keywords.values())
+    max_frequency = max(aggregated_keywords.values())
+
+    # If min and max frequency are the same, return no keywords
+    if min_frequency == max_frequency:
+        return dict()
+
+    # Aggregate keywords by granularity and normalise the values
+    previous_keywords = _normalize_values(_aggregate_keywords(previous, synonyms), min_frequency, max_frequency)
+    current_keywords = _normalize_values(_aggregate_keywords(current, synonyms), min_frequency, max_frequency)
+
+    # Return the slope for each common keyword
+    common_keywords = set(previous_keywords.keys()).intersection(set(current_keywords.keys()))
+    slopes = {keyword: current_keywords[keyword] - previous_keywords[keyword] for keyword in common_keywords}
+
+    # Sort keywords by slope
+    sorted_keywords = sorted(slopes.items(), key=operator.itemgetter(1), reverse=True)
+
+    return {keyword: frequency for keyword, frequency in sorted_keywords[:n_keywords]}
