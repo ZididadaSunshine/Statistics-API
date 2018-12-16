@@ -12,7 +12,7 @@ class Config:
 class DevelopmentConfig(Config):
     ENV = 'development'
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = f'postgresql://{os.getenv("DB_STATISTICS_USERNAME", None)}:{os.getenv("DB_STATISTICS_PASSWORD", None)}@{os.getenv("DB_STATISTICS_HOST", None)}/{os.getenv("DB_STATISTICS_DATABASE", None)}_dev'
+    SQLALCHEMY_DATABASE_URI = f'postgresql://{os.getenv("DB_USERNAME", None)}:{os.getenv("DB_PASSWORD", None)}@{os.getenv("DB_HOST", None)}/{os.getenv("DB_DATABASE", None)}'
 
 
 class ProductionConfig(Config):
