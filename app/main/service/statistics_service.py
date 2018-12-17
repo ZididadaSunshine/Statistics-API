@@ -122,7 +122,7 @@ def get_average(granularity_span, synonyms):
     posts = 0
     if current_snapshots:
         classes = _get_intersecting_classes(current_snapshots)
-        posts = reduce(lambda x, y: _sum_posts(current_snapshots, x) + _sum_posts(current_snapshots, y), classes)
+        posts = sum([_sum_posts(current_snapshots, cls) for cls in classes])
 
     return {
         'sentiment_average': current_average,
