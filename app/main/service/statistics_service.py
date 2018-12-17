@@ -1,6 +1,5 @@
 import datetime
 import operator
-import fcntl
 import time
 from functools import reduce
 
@@ -10,19 +9,8 @@ from app.main.model.synonym_model import Synonym
 _current_milli_time = lambda: int(round(time.time() * 1000))
 
 
-def _format_log_date(date):
-    return datetime.datetime.strftime(date, '%Y-%m-%d %H:%M:%S.%f')
-
-
 def _format_chart_date(date):
     return datetime.datetime.strftime(date, '%Y-%m-%d %H:%M:%S')
-
-
-def _append_line_exclusive(file, contents):
-    with open(file, 'a') as file:
-        fcntl.flock(file, fcntl.LOCK_EX)
-        file.write(contents + '\n')
-        fcntl.flock(file, fcntl.LOCK_UN)
 
 
 def _average(lst):
@@ -56,53 +44,85 @@ def _in_range(snap, lower, upper):
 
 
 def _get_snapshots(spans_from, spans_to, synonyms):
-    now_ms = _current_milli_time()
-
     snapshots = Snapshot.query.select_from(Synonym).filter(Synonym.synonym.in_(synonyms)).join(Synonym.snapshots). \
         filter((Snapshot.spans_from >= spans_from) & (Snapshot.spans_to <= spans_to)).all()
-
-    _append_line_exclusive('snapshot_timer.dat',
-                           f'{_format_log_date(datetime.datetime.utcnow())}={_current_milli_time() - now_ms}')
 
     return snapshots
 
 
-def _get_intersecting_classes(snapshots):
-    all_keys = [snap.statistics.keys() for snap in snapshots]
-    classes = reduce(lambda x, y: x & y, all_keys)
+def _get_n_latest(granularity_span, synonyms, n):
+    now = datetime.datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    start = now - granularity_span * n
 
-    return classes
+    snapshots = _get_snapshots(start, now, synonyms)
+
+    result = []
+    current_time = start
+    while current_time < now:
+        next_time = current_time + granularity_span
+
+        result.append([snap for snap in snapshots if _in_range(snap, current_time, next_time)])
+
+        current_time = next_time
+
+    return result
+
+
+def _aggregate_keywords(snapshots, skip_words=None):
+    aggregated = dict()
+
+    classes = _get_intersecting_classes(snapshots)
+    aggregated_by_class = _aggregate_keywords_by_class(classes, snapshots, skip_words)
+    for cls in classes:
+        for keyword, frequency in aggregated_by_class[cls].items():
+            aggregated[keyword] = aggregated.get(keyword, 0) + frequency
+
+    return aggregated
+
+
+def _aggregate_keywords_by_class(sentiment_classes, snapshots, skip_words=None):
+    sentimented_keywords = dict()
+
+    for cls in sentiment_classes:
+        sentimented_keywords[cls] = dict()
+
+        for snapshot in snapshots:
+            for keyword in snapshot.statistics[cls]['keywords']:
+                if skip_words and keyword in skip_words:
+                    continue
+
+                sentimented_keywords[cls][keyword] = sentimented_keywords[cls].get(keyword, 0) + 1
+
+    return sentimented_keywords
+
+
+def _get_intersecting_classes(snapshots):
+    if snapshots:
+        all_keys = [snap.statistics.keys() for snap in snapshots]
+
+        return reduce(lambda x, y: x & y, all_keys)
+
+    return list()
+
+
+def _normalize_values(from_dict, with_min, with_max):
+    return {x: (from_dict[x] - with_min) / (with_max - with_min) for x in from_dict}
 
 
 def get_average(granularity_span, synonyms):
     """ Provides the combined average over all the provided synonyms. """
-    now = datetime.datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-    previous = now - granularity_span
-
-    current_average = None
-    previous_average = None
-    posts = 0
-
     # Only retrieve snapshots once and then use in_range to determine which are in the correct ranges (less queries)
-    snapshots = _get_snapshots(now - granularity_span * 2, now, synonyms)
-    now_ms = _current_milli_time()
+    previous_snapshots, current_snapshots = _get_n_latest(granularity_span, synonyms, 2)
 
-    if snapshots:
-        # Compute averages from the current period and the previous
-        current_snapshots = [snap for snap in snapshots if _in_range(snap, previous, now)]
-        previous_snapshots = [snap for snap in snapshots if _in_range(snap, previous - granularity_span, now)]
+    # Get average sentiment values
+    current_average = _average([snap.sentiment for snap in current_snapshots])
+    previous_average = _average([snap.sentiment for snap in previous_snapshots])
 
-        # Get average sentiment values
-        current_average = _average([snap.sentiment for snap in current_snapshots])
-        previous_average = _average([snap.sentiment for snap in previous_snapshots])
-
-        # Sum posts for all classes in current snapshot period
-        if current_snapshots:
-            classes = _get_intersecting_classes(current_snapshots)
-            posts = reduce(lambda x, y: _sum_posts(current_snapshots, x) + _sum_posts(current_snapshots, y), classes)
-
-    _append_line_exclusive('average_timer.dat',
-                           f'{_format_log_date(datetime.datetime.utcnow())}={_current_milli_time() - now_ms}')
+    # Sum posts for all classes in current snapshot period
+    posts = 0
+    if current_snapshots:
+        classes = _get_intersecting_classes(current_snapshots)
+        posts = reduce(lambda x, y: _sum_posts(current_snapshots, x) + _sum_posts(current_snapshots, y), classes)
 
     return {
         'sentiment_average': current_average,
@@ -111,10 +131,9 @@ def get_average(granularity_span, synonyms):
     }
 
 
-def get_overview(spans_from, spans_to, granularity, synonyms):
+def get_overview(spans_from, spans_to, granularity, synonyms, n_keywords=5):
     """ Provides an overview for all synonyms and for each granularity that fits into it. """
     snapshots = _get_snapshots(spans_from, spans_to, synonyms)
-    now_ms = _current_milli_time()
 
     statistics = {synonym: dict() for synonym in synonyms}
     for synonym in synonyms:
@@ -134,33 +153,22 @@ def get_overview(spans_from, spans_to, granularity, synonyms):
 
                 continue
 
-            # Get which classes the snapshots agree on
-            all_keys = [snap.statistics.keys() for snap in contained]
-            classes = reduce(lambda x, y: x & y, all_keys)
+            # Get the intersection of classes
+            classes = _get_intersecting_classes(contained)
 
-            sentimented_keywords = dict()
-            class_statistics = dict()
-            # Group keywords by their sentiment. Aggregate their frequency.
-            for cls in classes:
-                sentimented_keywords[cls] = dict()
-                class_statistics[cls] = {'posts': _sum_posts(contained, cls)}
-
-                for snapshot in contained:
-                    for keyword in snapshot.statistics[cls]['keywords']:
-                        if keyword == synonym:
-                            continue
-
-                        if keyword in sentimented_keywords[cls]:
-                            sentimented_keywords[cls][keyword] += 1
-                        else:
-                            sentimented_keywords[cls][keyword] = 1
+            # Aggregate keywords by sentiment classes
+            sentimented_keywords = _aggregate_keywords_by_class(classes, contained, synonyms)
 
             # Sort key/value pairs of each sentiment class
+            class_statistics = dict()
             for cls in classes:
                 sorted_keywords = sorted(sentimented_keywords[cls].items(), key=operator.itemgetter(1), reverse=True)
 
                 # Take the top 5 keywords according to their frequency
-                class_statistics[cls]['keywords'] = [keyword for keyword, frequency in sorted_keywords[:5]]
+                class_statistics[cls] = {
+                    'posts': _sum_posts(contained, cls),
+                    'keywords': [keyword for keyword, frequency in sorted_keywords[:n_keywords]]
+                }
 
             statistics[synonym][_format_chart_date(current_time)] = {
                 'sentiment': _average([snap.sentiment for snap in contained]),
@@ -169,7 +177,34 @@ def get_overview(spans_from, spans_to, granularity, synonyms):
 
             current_time = current_max_time
 
-    _append_line_exclusive('overview_timer.dat',
-                           f'{_format_log_date(datetime.datetime.utcnow())}={_current_milli_time() - now_ms}')
-
     return statistics
+
+
+def get_trending_keywords(granularity_span, synonyms, n_keywords=10):
+    previous, current = _get_n_latest(granularity_span, synonyms, 2)
+
+    # Aggregate all keywords from the period
+    aggregated_keywords = _aggregate_keywords(previous + current, synonyms)
+    if not aggregated_keywords:
+        return dict()
+
+    # Get the minimum and maximum frequency
+    min_frequency = min(aggregated_keywords.values())
+    max_frequency = max(aggregated_keywords.values())
+
+    # If min and max frequency are the same, return no keywords
+    if min_frequency == max_frequency:
+        return dict()
+
+    # Aggregate keywords by granularity and normalise the values
+    previous_keywords = _normalize_values(_aggregate_keywords(previous, synonyms), min_frequency, max_frequency)
+    current_keywords = _normalize_values(_aggregate_keywords(current, synonyms), min_frequency, max_frequency)
+
+    # Return the slope for each common keyword
+    common_keywords = set(previous_keywords.keys()).intersection(set(current_keywords.keys()))
+    slopes = {keyword: current_keywords[keyword] - previous_keywords[keyword] for keyword in common_keywords}
+
+    # Sort keywords by slope
+    sorted_keywords = sorted(slopes.items(), key=operator.itemgetter(1), reverse=True)
+
+    return {keyword: frequency for keyword, frequency in sorted_keywords[:n_keywords]}

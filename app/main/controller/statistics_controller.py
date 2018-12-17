@@ -5,7 +5,7 @@ from flask import request
 from flask_restplus import Resource
 
 from app.main.dto.statistics_dto import StatisticsDTO
-from app.main.service.statistics_service import get_overview, get_average
+from app.main.service.statistics_service import get_overview, get_average, get_trending_keywords
 
 api = StatisticsDTO.api
 
@@ -61,3 +61,18 @@ class OverviewStatisticsResource(Resource):
             return dict(message=f'Expected granularity to be greater or equal to time range.'), 400
 
         return get_overview(spans_from, spans_to, granularity_span, synonyms)
+
+
+@api.route('/<string:granularity>/trending')
+class TrendingKeywordsResource(Resource):
+    @api.doc('Retrieve trending keywords from a time range and a granularity.')
+    @api.expect(StatisticsDTO.synonyms, validate=True)
+    def post(self, granularity):
+        synonyms = request.json['synonyms']
+
+        # Check if granularity is supported
+        granularity_span = _get_granularity_span(granularity)
+        if not granularity_span:
+            return dict(message=f'Unsupported granularity {granularity}.'), 400
+
+        return get_trending_keywords(granularity_span, synonyms)
