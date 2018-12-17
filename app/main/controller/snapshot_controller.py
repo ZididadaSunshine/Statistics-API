@@ -15,7 +15,7 @@ api = SnapshotDTO.api
 class SnapshotsResource(Resource):
     ISO_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
     EXPECTED_PROPERTIES = {'posts', 'keywords'}
-    CLASSES_REQUIRED = 2
+    MIN_CLASSES_REQUIRED = 2
 
     @api.response(SnapshotServiceResponse.AlreadyExists, 'Snapshot already exists.')
     @api.response(SnapshotServiceResponse.Created, 'Snapshot created successfully.')
@@ -29,7 +29,7 @@ class SnapshotsResource(Resource):
         sentiment = request.json['sentiment']
 
         # Confirm that all required classes are provided
-        if len(statistics) != self.CLASSES_REQUIRED:
+        if len(statistics) < self.MIN_CLASSES_REQUIRED:
             return dict(message='Invalid amount of classes specified.'), 400
 
         # Confirm that statistics for all classes are provided
